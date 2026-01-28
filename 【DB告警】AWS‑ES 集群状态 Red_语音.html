@@ -1,0 +1,124 @@
+
+<div class="lx-root lx-page" data-type="page" data-root-id="265bc2b8c5264975906448119408eb2b">
+<p class="lx-image" data-type="image"  style="text-align: left;"><img src="/kb_files/ee4718f9632e4de591b13554ebf69e90" style="width: 1430px;height: 578px;" data-file-id="ee4718f9632e4de591b13554ebf69e90" /></p>
+
+<h2 class="lx-h2" data-type="h2" >记录者 / 指导人 / 时间</h2>
+
+<ul ><li class="lx-bulleted_list" data-type="bulleted_list" ><b>记录者</b>：曾翔宇</li>
+
+<li class="lx-bulleted_list" data-type="bulleted_list" ><b>指导人</b>：王东尧</li>
+
+<li class="lx-bulleted_list" data-type="bulleted_list" ><b>时间</b>：2025-10-24</li></ul>
+
+<h2 class="lx-h2" data-type="h2" >步骤1：确认告警信息</h2>
+
+<ul ><li class="lx-bulleted_list" data-type="bulleted_list" ><b>告警等级</b>：P1（告警）</li>
+
+<li class="lx-bulleted_list" data-type="bulleted_list" ><b>集群</b>：<code>luckyur-log</code></li>
+
+<li class="lx-bulleted_list" data-type="bulleted_list" ><b>告警名称</b>：<code>【DB告警】AWS‑ES 集群状态 Red_语音</code></li>
+
+<li class="lx-bulleted_list" data-type="bulleted_list" ><b>Green</b>：主分片与副本均已分配；</li>
+
+<li class="lx-bulleted_list" data-type="bulleted_list" ><b>Yellow</b>：主分片已分配，<b>部分副本未分配</b>（通常可等待恢复）；</li>
+
+<li class="lx-bulleted_list" data-type="bulleted_list" ><b>Red</b>：存在<b>未分配的主分片</b>，部分数据/索引不可用，必须立即处理。</li></ul>
+
+<h2 class="lx-h2" data-type="h2" >步骤2：现场证据与时间线</h2>
+
+<ul ><li class="lx-bulleted_list" data-type="bulleted_list" ><b>00:57 左右</b>：触发 <b>Cluster health=Red</b> 告警。</li>
+
+<li class="lx-bulleted_list" data-type="bulleted_list" ><b>Index 管理</b>：看到 <code>iprod_tomcat_lucky_k8s-2025.10.12-000050</code> 上报 <b>4 个 unassigned shards</b>；该索引显示 <code>shards: 8 * 0</code>（8 个主分片、<b>0 副本</b>）。</li>
+
+<li class="lx-bulleted_list" data-type="bulleted_list" ><b>节点视图</b>：<code>Total nodes</code> 指标短暂从 <b>7 降到 4</b>，旋即回到 7（疑似数据节点瞬时掉线/重启）。</li></ul>
+
+<ul ><li class="lx-bulleted_list" data-type="bulleted_list" >由此出现<b>主分片未分配</b> → 集群 <b>Red</b>；节点恢复后仍有<b>残留未分配主分片</b>使集群保持 Red（日志索引常见）。</li></ul>
+
+<p class="lx-image" data-type="image"  style="text-align: left;"><img src="/kb_files/6e7dfd8b8dca447da29b0b5ec5d76808" style="width: 1098px;height: 420px;" data-file-id="6e7dfd8b8dca447da29b0b5ec5d76808" /></p>
+
+<h2 class="lx-h2" data-type="h2" >步骤3：根因分析</h2>
+
+<p class="lx-p" data-type="p" ><b>直接原因</b>：数据节点短时掉线，引起部分 <b>主分片未分配（unassigned primary）</b>。该日志索引 <b>无副本（0 replicas）</b>，故无法自动从副本提升为主，集群健康度转 <b>Red</b>。
+<b>原理依据</b>：</p>
+
+<ul ><li class="lx-bulleted_list" data-type="bulleted_list" ><b>Red</b> = 存在未分配<b>主分片</b>；<b>Yellow</b> = 主分片都在，仅有<b>副本</b>未分配。</li>
+
+<li class="lx-bulleted_list" data-type="bulleted_list" ><b>副本分片</b>用于冗余与故障切换，缺失副本时节点下线更容易导致主分片不可用。</li></ul>
+
+<h2 class="lx-h2" data-type="h2" >步骤4：监控面板快速判定</h2>
+
+<ol ><li class="lx-numbered_list" data-type="numbered_list" ><b>OpenSearch 控制台 → Cluster health / Instance health</b>
+<ul ><li class="lx-bulleted_list" data-type="bulleted_list" ><b>Shards.unassigned / Shards.activePrimary / ClusterStatus.*</b></li>
+
+<li class="lx-bulleted_list" data-type="bulleted_list" ><b>Nodes</b>（节点数是否波动）</li>
+
+<li class="lx-bulleted_list" data-type="bulleted_list" ><b>FreeStorageSpace、ClusterUsedSpace、JVMMemoryPressure、ClusterIndexWritesBlocked</b>。</li>
+
+<li class="lx-bulleted_list" data-type="bulleted_list" >注：当 <b>FreeStorageSpace=0</b> 时会触发 <code>ClusterBlockException</code>（写入被阻断）。</li></ul>
+</li>
+
+<li class="lx-numbered_list" data-type="numbered_list" ><b>CloudWatch 指标</b>（1 分钟粒度查看<b>最大值/最小值</b>）：
+<ul ><li class="lx-bulleted_list" data-type="bulleted_list" ><code>FreeStorageSpace</code>（总/最小结点剩余空间）；</li>
+
+<li class="lx-bulleted_list" data-type="bulleted_list" ><code>ClusterIndexWritesBlocked</code>（1=阻塞，0=正常；常因空间不足或 JVM 压力过高）。</li></ul>
+</li>
+
+<li class="lx-numbered_list" data-type="numbered_list" ><b>磁盘水位提示</b>：OpenSearch 默认 <b>flood‑stage</b> 水位为 <b>95%</b>，超过后所在结点上的索引会被自动加上**只读（允许删除）**保护，写入被阻断，直到利用率回落到高水位以下。</li></ol>
+
+<h2 class="lx-h2" data-type="h2" >步骤5：删除与空间回收</h2>
+
+<p class="lx-p" data-type="p" >通过 <b>KBX → Index Management</b> 或者Kibana 操作，以下为标准化清理流程与注意事项：</p>
+
+<h3 class="lx-h3" data-type="h3" >5.1 触发条件与目标</h3>
+
+<ul ><li class="lx-bulleted_list" data-type="bulleted_list" ><b>触发</b>：<code>FreeStorageSpace</code> 持续低于 <b>10 GiB</b> 且趋势走低；若出现 <code>ClusterIndexWritesBlocked=1</code>，优先清理。</li>
+
+<li class="lx-bulleted_list" data-type="bulleted_list" ><b>目标</b>：释放空间、恢复写入、迅速把 <b>Red</b> 拉回 <b>Yellow/Green</b>；全程截图留痕。
+参考文档：【DB告警】AWS-ES磁盘空间不足10G</li></ul>
+
+<h3 class="lx-h3" data-type="h3" >5.2 KBX 操作步骤</h3>
+
+<ol ><li class="lx-numbered_list" data-type="numbered_list" ><b>进入 KBX → Stack Management → Index Management → Indices</b>。</li>
+
+<li class="lx-numbered_list" data-type="numbered_list" ><b>按 Size 降序</b>定位大索引，结合<b>索引命名日期</b>核对是否<b>超过保留期</b>。</li>
+
+<li class="lx-numbered_list" data-type="numbered_list" ><b>选中待删除索引 → Manage indices → Delete indices</b>；按提示<b>二次确认</b>（同时截取“删除前”列表与指标截图）。</li>
+
+<li class="lx-numbered_list" data-type="numbered_list" ><b>批量建议</b>：一次删除 <b>5–10</b> 个索引，观察 5–10 分钟，确认空间显著回升与健康度恢复后再继续。</li></ol>
+
+<h3 class="lx-h3" data-type="h3" >5.3 <b>严禁直接删除“当前写入索引”</b></h3>
+
+<ul ><li class="lx-bulleted_list" data-type="bulleted_list" >如果待删索引是<b>最新写入</b>（挂着<b>写别名</b>的那个），必须<b>先在 KBX 中做“Rollover &amp; 切换写别名”</b>，让写流量切至新索引，再删除旧索引；否则会造成写入中断。</li>
+
+<li class="lx-bulleted_list" data-type="bulleted_list" >这是 OpenSearch <b>rollover + 写别名</b>的通用原则（AWS 官方在处理失败 rollover 的知识库中也强调要把 <b>rollover alias</b> 迁移到新索引后再处理老索引）。</li></ul>
+
+<h3 class="lx-h3" data-type="h3" >5.4 日志保留策略（从内网文档同步）</h3>
+
+<ul ><li class="lx-bulleted_list" data-type="bulleted_list" ><b>按日索引</b>：<b>保留 7 天</b>（优先清理超期的日索引）；</li>
+
+<li class="lx-bulleted_list" data-type="bulleted_list" ><b>按月索引</b>：<b>保留 3–6 个月</b>（谨慎删除）；</li>
+
+<li class="lx-bulleted_list" data-type="bulleted_list" ><b>集群特例</b>：<code>luckylfe-log</code> <b>保留 30 天</b>、<code>luckyur-log</code> <b>保留 15 天</b>、<code>dify</code> 暂不处理。</li>
+
+<li class="lx-bulleted_list" data-type="bulleted_list" ><b>不删</b>：系统索引（以<code>.</code>开头）、当前活跃写入索引。</li></ul>
+
+<h2 class="lx-h2" data-type="h2" >步骤6：变更记录与沟通</h2>
+
+<ul ><li class="lx-bulleted_list" data-type="bulleted_list" >在告警群同步<b>清理计划</b>（将删除的索引清单、预计释放空间、前后对比截图）。</li>
+
+<li class="lx-bulleted_list" data-type="bulleted_list" >删除后再次截图：<b>FreeStorageSpace</b>（&gt;10 GiB）、<b>ClusterHealthStatus</b>（Green/Yellow）、<code>ClusterIndexWritesBlocked=0</code>。</li>
+
+<li class="lx-bulleted_list" data-type="bulleted_list" >若 24h 内重复出现 <b>Red</b> 或 <b>写阻断</b>，升级 DBA/平台工程评估：是否需要<b>扩容</b>（更大 EBS / 增加节点）或<b>优化采集量</b>与<b>ISM 策略</b></li></ul>
+
+<h2 class="lx-h2" data-type="h2" >步骤7：问题解决确认</h2>
+
+<ul ><li class="lx-bulleted_list" data-type="bulleted_list" ><code>_Cluster health_</code> 已恢复 <b>Green / Yellow→Green</b>；</li>
+
+<li class="lx-bulleted_list" data-type="bulleted_list" ><code>Shards.unassigned</code> 清零或显著下降；</li>
+
+<li class="lx-bulleted_list" data-type="bulleted_list" ><code>FreeStorageSpace</code> 上升到阈值以上且一周趋势转稳；</li>
+
+<li class="lx-bulleted_list" data-type="bulleted_list" ><code>ClusterIndexWritesBlocked=0</code>；</li>
+
+<li class="lx-bulleted_list" data-type="bulleted_list" >业务侧日志写入、检索无异常。</li></ul>
+</div>

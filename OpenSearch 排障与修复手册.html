@@ -1,0 +1,214 @@
+
+<div class="lx-root lx-page" data-type="page" data-root-id="6e3b8d31c6154cb4a519e88343e34e8a">
+<h2 class="lx-h2" data-type="h2" >第一步：怎么知道 Elasticsearch 出问题了？</h2>
+
+<h3 class="lx-h3" data-type="h3" >你会在哪里看到告警？</h3>
+
+<p class="lx-p" data-type="p" >【DB告警】AWS-ES 集群状态Red</p>
+
+<p class="lx-p" data-type="p" >【DB告警】AWS-ES 集群状态Yellow</p>
+
+<ul ><li class="lx-bulleted_list" data-type="bulleted_list" >企微告警群收到消息</li>
+
+<li class="lx-bulleted_list" data-type="bulleted_list" >手机短信报警通知</li>
+
+<li class="lx-bulleted_list" data-type="bulleted_list" >AWS OpenSearch 控制台集群颜色变黄或红</li></ul>
+
+<p class="lx-p" data-type="p" >这些都说明可能有索引或节点出了问题。</p>
+
+<p class="lx-image" data-type="image"  style="text-align: left;"><img src="/kb_files/d9eae25a0a8a4cb7b0d4eeef7e147247" style="width: 767px;height: 250px;" data-file-id="d9eae25a0a8a4cb7b0d4eeef7e147247" /></p>
+
+<hr class="lx-divider" data-type="divider" />
+
+<h2 class="lx-h2" data-type="h2" >第二步：确认出了什么问题？</h2>
+
+<h3 class="lx-h3" data-type="h3" >方式一：看我们自己的 KBX 系统</h3>
+
+<ol ><li class="lx-numbered_list" data-type="numbered_list" >登录我们自己的 KBX 系统 <a href="https://ikbx.luckincoffee.us/#/admin/first">https://ikbx.luckincoffee.us/#/admin/first</a></li>
+
+<li class="lx-numbered_list" data-type="numbered_list" >集群 → 集群列表 → 点对应集群的集群明细</li>
+
+<li class="lx-numbered_list" data-type="numbered_list" >找到分片列表，关注状态列：
+<ul ><li class="lx-bulleted_list" data-type="bulleted_list" >✅ <code>relocating</code>、<code>initializing</code> 这两种状态是一般正常的</li>
+
+<li class="lx-bulleted_list" data-type="bulleted_list" >❌ 但是<code>unassigned</code> 的状态一旦<b>单独出现</b>是有问题，必须处理</li>
+
+<li class="lx-bulleted_list" data-type="bulleted_list" >
+<p class="lx-image" data-type="image"  style="text-align: left;"><img src="/kb_files/afeefcb87bea4814ab760d50d684d13f" style="width: 324px;height: 150px;" data-file-id="afeefcb87bea4814ab760d50d684d13f" /></p>
+</li></ul>
+</li></ol>
+
+<h3 class="lx-h3" data-type="h3" >方式二：看 AWS 提供的 Kibana</h3>
+
+<ol ><li class="lx-numbered_list" data-type="numbered_list" >打开 AWS 控制台，找到对应的 OpenSearch 集群</li>
+
+<li class="lx-numbered_list" data-type="numbered_list" >右上角点开 Kibana 链接
+<ul ><li class="lx-bulleted_list" data-type="bulleted_list" >如果打不开，需要把这个 Kibana 链接的 IP 用 dig 查出来，加入 Array VPN 白名单（）</li></ul>
+</li>
+
+<li class="lx-numbered_list" data-type="numbered_list" >在 Kibana 左上角点三条杠 &gt; Index Management &gt; Indices
+<ol ><li class="lx-numbered_list" data-type="numbered_list" >
+<p class="lx-image" data-type="image"  style="text-align: left;"><img src="/kb_files/f7687f1c3cb241bc9e4e33d98482d622" style="width: 93px;height: 250px;" data-file-id="f7687f1c3cb241bc9e4e33d98482d622" /></p>
+</li></ol>
+</li>
+
+<li class="lx-numbered_list" data-type="numbered_list" >看 Health 一列：
+<ul ><li class="lx-bulleted_list" data-type="bulleted_list" >✅ green = 正常</li>
+
+<li class="lx-bulleted_list" data-type="bulleted_list" >⚠️ yellow = 主分片正常，但副本异常</li>
+
+<li class="lx-bulleted_list" data-type="bulleted_list" >❌ red = 主分片也异常，最严重</li>
+
+<li class="lx-bulleted_list" data-type="bulleted_list" >
+<p class="lx-image" data-type="image"  style="text-align: left;"><img src="/kb_files/7b7a573bdc2e4e54973ba5ec2444e18d" style="width: 596px;height: 250px;" data-file-id="7b7a573bdc2e4e54973ba5ec2444e18d" /></p>
+</li></ul>
+</li></ol>
+
+<h3 class="lx-h3" data-type="h3" >方式三：直接用命令查</h3>
+
+<p class="lx-p" data-type="p" >在 KBX Console 或者Kibana Console 里运行命令：</p>
+
+<p class="lx-code" data-type="code"><pre><code >GET _cluster/allocation/explain</code></pre></p>
+
+<p class="lx-p" data-type="p" >这个命令能告诉你现在有哪些分片出问题了。</p>
+
+<p class="lx-p" data-type="p" >注意：它每次不会一次显示所有有问题的索引，需要多跑几次。</p>
+
+<hr class="lx-divider" data-type="divider" />
+
+<h2 class="lx-h2" data-type="h2" >第三步：处理</h2>
+
+<p class="lx-p" data-type="p" >先在AWS窗口里看是不是掉节点了，如果是掉节点的话就等几分钟看节点会不会恢复，同时给aws写工单问什么情况，但是大概率是有人在grafana一次性扒了太多数据把节点cpu搞崩了（比如一口气扒7天）</p>
+
+<p class="lx-p" data-type="p" >此情况的话未来两种处理方式</p>
+
+<ol ><li class="lx-numbered_list" data-type="numbered_list" >教育一下在 grafana 扒数据太猛的小伙伴让他以后收敛一下</li>
+
+<li class="lx-numbered_list" data-type="numbered_list" >升级ES节点配置</li></ol>
+
+<p class="lx-p" data-type="p" >如果不是节点掉线，请看下面的流程</p>
+
+<h3 class="lx-h3" data-type="h3" >怎么处理 yellow 状态（副本异常）</h3>
+
+<p class="lx-p" data-type="p" >Yellow，说明主分片正常，但副分片没分配成功。</p>
+
+<p class="lx-p" data-type="p" ><b>解决方式：把副分片干掉</b></p>
+
+<p class="lx-p" data-type="p" >你可以在 Console 里运行：</p>
+
+<p class="lx-code" data-type="code"><pre><code >PUT 索引名/_settings
+{
+  &quot;index.number_of_replicas&quot;: 0
+}</code></pre></p>
+
+<p class="lx-p" data-type="p" >比如：</p>
+
+<p class="lx-code" data-type="code"><pre><code >PUT ufenginx-2025.07.16/_settings
+{
+  &quot;index.number_of_replicas&quot;: 0
+}</code></pre></p>
+
+<p class="lx-p" data-type="p" >运行完以后，索引状态一般能变成 green。</p>
+
+<p class="lx-p" data-type="p" >注意：你可以选择只改某一个具体的索引，也可以改一整类（比如 <code>xxx-*</code>），也可以直接改它的模板（template）让从此以后所有用这个模版的索引都变成副本数为 0。</p>
+
+<p class="lx-p" data-type="p" ><b>如果要改模板副本数：</b></p>
+
+<ol ><li class="lx-numbered_list" data-type="numbered_list" >先运行：<code>GET _template</code> 找到目标模板名</li>
+
+<li class="lx-numbered_list" data-type="numbered_list" >把右边展示的模板内容复制到 Console 左边</li>
+
+<li class="lx-numbered_list" data-type="numbered_list" >改副本数：</li></ol>
+
+<p class="lx-code" data-type="code"><pre><code >&quot;number_of_replicas&quot;: &quot;0&quot;</code></pre></p>
+
+<ol ><li class="lx-numbered_list" data-type="numbered_list" >用 PUT 命令重新提交这个模板</li></ol>
+
+<h3 class="lx-h3" data-type="h3" >怎么处理 red 状态（主分片也挂了）</h3>
+
+<p class="lx-p" data-type="p" >这种情况比较严重。建议处理流程如下：</p>
+
+<p class="lx-p" data-type="p" ><b>尝试修复：</b></p>
+
+<p class="lx-code" data-type="code"><pre><code >POST _cluster/reroute?retry_failed=true</code></pre></p>
+
+<p class="lx-p" data-type="p" >这个命令会尝试让系统重新分配分片，但成功率一般不高。</p>
+
+<p class="lx-p" data-type="p" ><b>如果没用：</b></p>
+
+<p class="lx-p" data-type="p" >那就只剩下两种方案：</p>
+
+<ol ><li class="lx-numbered_list" data-type="numbered_list" >直接把副本删掉（如果是副本导致的）</li>
+
+<li class="lx-numbered_list" data-type="numbered_list" >删除索引（数据可丢失时才做）</li></ol>
+
+<p class="lx-code" data-type="code"><pre><code ></code></pre></p>
+
+<hr class="lx-divider" data-type="divider" />
+
+<h2 class="lx-h2" data-type="h2" >为什么会出问题？怎么预防？</h2>
+
+<h3 class="lx-h3" data-type="h3" >常见原因</h3>
+
+<ul ><li class="lx-bulleted_list" data-type="bulleted_list" >有人（我）在 Grafana 一口气拉取 7 天日志，CPU 飙升导致节点挂了</li>
+
+<li class="lx-bulleted_list" data-type="bulleted_list" >机器配置太低（尤其是数据节点），节点容易掉</li></ul>
+
+<h3 class="lx-h3" data-type="h3" >预防方式</h3>
+
+<ul ><li class="lx-bulleted_list" data-type="bulleted_list" >不要一次拉太多数据，分段拉</li>
+
+<li class="lx-bulleted_list" data-type="bulleted_list" >定期升级 data node 的配置，不要动 master node</li>
+
+<li class="lx-bulleted_list" data-type="bulleted_list" >定期清理缓存 POST _cluster/reroute?retry_failed=true</li></ul>
+
+<h3 class="lx-h3" data-type="h3" >自动回收政策</h3>
+
+<h4 class="lx-h4" data-type="h4" >在哪里找</h4>
+
+<ul ><li class="lx-bulleted_list" data-type="bulleted_list" ><b>KBX UI：</b>点击对应集群的索引工具 &gt; 索引生命周期
+<ul ><li class="lx-bulleted_list" data-type="bulleted_list" >
+<p class="lx-image" data-type="image"  style="text-align: left;"><img src="/kb_files/183f18be9d0640aaa7f9ecb40e1f6312" style="width: 914px;height: 250px;" data-file-id="183f18be9d0640aaa7f9ecb40e1f6312" /></p>
+</li></ul>
+</li>
+
+<li class="lx-bulleted_list" data-type="bulleted_list" ><b>Kibana UI：</b>路径：Index Management &gt; State management policies
+<ul ><li class="lx-bulleted_list" data-type="bulleted_list" >
+<p class="lx-image" data-type="image"  style="text-align: left;"><img src="/kb_files/51bc906beb3c40dc9508ae06c4fec288" style="width: 825px;height: 250px;" data-file-id="51bc906beb3c40dc9508ae06c4fec288" /></p>
+</li></ul>
+</li></ul>
+
+<h4 class="lx-h4" data-type="h4" >如何确认在使用</h4>
+
+<p class="lx-p" data-type="p" ><b>Kibana UI：</b>路径：Index Management → indices 里有一列叫“Managed by Policy”</p>
+
+<ul ><li class="lx-bulleted_list" data-type="bulleted_list" >Yes：有生命周期策略</li>
+
+<li class="lx-bulleted_list" data-type="bulleted_list" >No：没有，需要跟 DBA 同事沟通</li></ul>
+
+<hr class="lx-divider" data-type="divider" />
+
+<h2 class="lx-h2" data-type="h2" >额外建议</h2>
+
+<ul ><li class="lx-bulleted_list" data-type="bulleted_list" >有些重要索引可以临时把副本删掉救急，修好后再改回来</li>
+
+<li class="lx-bulleted_list" data-type="bulleted_list" >并不是所有 OpenSearch 集群都是日志类的，比如 Dify 集群的数据就不能乱删</li>
+
+<li class="lx-bulleted_list" data-type="bulleted_list" >OpenSearch 出问题时，<b>重启没有用，反而可能更严重</b>，只能靠前面讲的方法来修</li></ul>
+
+<hr class="lx-divider" data-type="divider" />
+
+<h2 class="lx-h2" data-type="h2" >总结</h2>
+
+<ol ><li class="lx-numbered_list" data-type="numbered_list" >看有没有单独出现的 unassigned状态（KBX、Kibana、命令）</li>
+
+<li class="lx-numbered_list" data-type="numbered_list" >找到哪个索引出问题</li>
+
+<li class="lx-numbered_list" data-type="numbered_list" >yellow 状态 → 先删副本</li>
+
+<li class="lx-numbered_list" data-type="numbered_list" >red 状态 → 尝试 reroute，不行再删索引</li>
+
+<li class="lx-numbered_list" data-type="numbered_list" >如果问题频繁，排查是否是请求太猛 or 节点太弱</li></ol>
+
+<p class="lx-p" data-type="p" >搞定✅。</p>
+</div>

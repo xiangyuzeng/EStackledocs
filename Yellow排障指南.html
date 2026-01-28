@@ -1,0 +1,778 @@
+
+<div class="lx-root lx-page" data-type="page" data-root-id="b387efbf3efa4f94a06b1bd0040678c4">
+<p class="lx-p" data-type="p" >
+<b>创建者</b>：曾翔宇 (美国运维DBA)
+<b>指导人</b>：吴艺良</p>
+
+<hr class="lx-divider" data-type="divider" />
+
+<h2 class="lx-h2" data-type="h2" >目录</h2>
+
+<ol ><li class="lx-numbered_list" data-type="numbered_list" >告警概述与集群状态说明</li>
+
+<li class="lx-numbered_list" data-type="numbered_list" >问题诊断方法</li>
+
+<li class="lx-numbered_list" data-type="numbered_list" >Yellow 状态处理流程</li>
+
+<li class="lx-numbered_list" data-type="numbered_list" >Red 状态处理流程</li>
+
+<li class="lx-numbered_list" data-type="numbered_list" >常用诊断与修复命令</li>
+
+<li class="lx-numbered_list" data-type="numbered_list" >预防措施与最佳实践</li>
+
+<li class="lx-numbered_list" data-type="numbered_list" >实战案例：luckylfe-log 集群事件</li>
+
+<li class="lx-numbered_list" data-type="numbered_list" >附录</li></ol>
+
+<hr class="lx-divider" data-type="divider" />
+
+<h2 class="lx-h2" data-type="h2" >一、告警概述与集群状态说明</h2>
+
+<h3 class="lx-h3" data-type="h3" >1.1 告警类型</h3>
+
+<table class="lx-table" data-type="table" border="1" cellspacing="0" cellpadding="10"><colgroup><col style="width: 276px"></col><col style="width: 150px"></col><col style="width: 180px"></col><col style="width: 156px"></col></colgroup><tbody><tr><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >告警名称</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >等级</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >含义</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >紧急程度</p>
+</td></tr><tr><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" ><code>【DB告警】AWS-ES 集群状态Yellow</code></p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >P2</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >主分片正常，部分副本未分配</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >⚠️ 观察，可等待自动恢复</p>
+</td></tr><tr><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" ><code>【DB告警】AWS-ES 集群状态Red</code></p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >P1</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >存在未分配的主分片</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >🔴 紧急，必须立即处理</p>
+</td></tr><tr><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" ><code>【DB告警】AWS-ES 集群状态Red_语音</code></p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >P0</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >Red 状态持续，触发电话告警</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >🚨 最高优先级</p>
+</td></tr></tbody></table>
+
+<h3 class="lx-h3" data-type="h3" >1.2 集群状态详解</h3>
+
+<p class="lx-code" data-type="code"><pre><code >🟢 Green → 🟡 Yellow → 🔴 Red</code></pre></p>
+
+<table class="lx-table" data-type="table" border="1" cellspacing="0" cellpadding="10"><colgroup><col style="width: 150px"></col><col style="width: 150px"></col><col style="width: 150px"></col><col style="width: 150px"></col><col style="width: 228px"></col></colgroup><tbody><tr><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >状态</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >主分片</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >副本分片</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >数据可用性</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >处理建议</p>
+</td></tr><tr><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" ><b>Green</b></p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >✅ 全部分配</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >✅ 全部分配</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >100% 可用</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >正常状态，无需处理</p>
+</td></tr><tr><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" ><b>Yellow</b></p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >✅ 全部分配</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >⚠️ 部分未分配</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >100% 可用（无冗余）</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >观察 5-10 分钟，未恢复则手动处理</p>
+</td></tr><tr><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" ><b>Red</b></p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >❌ 存在未分配</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >❌ 部分未分配</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >部分数据不可用</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >立即处理，可能需要删除索引</p>
+</td></tr></tbody></table>
+
+<h3 class="lx-h3" data-type="h3" >1.3 常见触发原因</h3>
+
+<p class="lx-p" data-type="p" ><b>🔥 最常见原因（占 80%+）</b></p>
+
+<ol ><li class="lx-numbered_list" data-type="numbered_list" ><b>Grafana/日志系统大范围查询</b>：一次性拉取 7 天以上数据，导致 JVM 内存飙升、节点 OOM</li>
+
+<li class="lx-numbered_list" data-type="numbered_list" ><b>索引无副本配置（N:0）</b>：节点故障时无法自动恢复，直接进入 Red</li>
+
+<li class="lx-numbered_list" data-type="numbered_list" ><b>节点配置不足</b>：m5.large 等小规格实例，内存紧张易触发 OOM</li></ol>
+
+<p class="lx-p" data-type="p" ><b>其他原因：</b></p>
+
+<ul ><li class="lx-bulleted_list" data-type="bulleted_list" >磁盘空间不足（触发 flood-stage 水位保护）</li>
+
+<li class="lx-bulleted_list" data-type="bulleted_list" >分片数量过多（超过节点承载能力）</li>
+
+<li class="lx-bulleted_list" data-type="bulleted_list" >网络抖动导致节点短暂掉线</li>
+
+<li class="lx-bulleted_list" data-type="bulleted_list" >AWS 底层硬件故障（较少见）</li></ul>
+
+<hr class="lx-divider" data-type="divider" />
+
+<h2 class="lx-h2" data-type="h2" >二、问题诊断方法</h2>
+
+<h3 class="lx-h3" data-type="h3" >2.1 诊断流程</h3>
+
+<ol ><li class="lx-numbered_list" data-type="numbered_list" >收到告警 → 确认集群名称和告警类型</li>
+
+<li class="lx-numbered_list" data-type="numbered_list" >检查节点状态 → AWS Console 查看节点数是否波动</li>
+
+<li class="lx-numbered_list" data-type="numbered_list" >检查 JVM/CPU → 确认是否资源耗尽导致</li>
+
+<li class="lx-numbered_list" data-type="numbered_list" >定位问题索引 → KBX/Kibana 查看 unassigned 分片</li>
+
+<li class="lx-numbered_list" data-type="numbered_list" >选择修复方案 → Yellow 删副本 / Red 删索引或恢复</li></ol>
+
+<h3 class="lx-h3" data-type="h3" >2.2 方式一：KBX 系统（推荐首选）</h3>
+
+<ol ><li class="lx-numbered_list" data-type="numbered_list" >登录 KBX：<a href="https://ikbx.luckincoffee.us/#/admin/first">https://ikbx.luckincoffee.us/#/admin/first</a></li>
+
+<li class="lx-numbered_list" data-type="numbered_list" >导航：<b>集群 → 集群列表 → 点击对应集群的「集群明细」</b></li>
+
+<li class="lx-numbered_list" data-type="numbered_list" >查看<b>分片列表</b>，关注状态列：
+<ul ><li class="lx-bulleted_list" data-type="bulleted_list" >✅ <code>relocating</code>、<code>initializing</code> — 正常状态</li>
+
+<li class="lx-bulleted_list" data-type="bulleted_list" >❌ <code>unassigned</code> — <b>单独出现时必须处理</b></li></ul>
+</li>
+
+<li class="lx-numbered_list" data-type="numbered_list" >勾选「<b>show only unhealthy indices</b>」快速定位问题索引</li></ol>
+
+<h3 class="lx-h3" data-type="h3" >2.3 方式二：AWS Kibana</h3>
+
+<ol ><li class="lx-numbered_list" data-type="numbered_list" >打开 AWS Console → OpenSearch Service → 选择对应集群</li>
+
+<li class="lx-numbered_list" data-type="numbered_list" >点击右上角 <b>OpenSearch Dashboards URL</b>（Kibana 链接）</li>
+
+<li class="lx-numbered_list" data-type="numbered_list" >如打不开，需将 Kibana URL 的 IP 加入 Array VPN 白名单</li>
+
+<li class="lx-numbered_list" data-type="numbered_list" >在 Kibana 中：<b>☰ → Index Management → Indices</b></li>
+
+<li class="lx-numbered_list" data-type="numbered_list" >查看 <b>Health</b> 列：筛选 <code>red</code> 或 <code>yellow</code></li></ol>
+
+<h3 class="lx-h3" data-type="h3" >2.4 方式三：AWS Console 监控指标</h3>
+
+<table class="lx-table" data-type="table" border="1" cellspacing="0" cellpadding="10"><colgroup><col style="width: 360px"></col><col style="width: 150px"></col><col style="width: 150px"></col><col style="width: 276px"></col></colgroup><tbody><tr><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >指标</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >正常范围</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >告警阈值</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >说明</p>
+</td></tr><tr><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" ><code>ClusterStatus.green/yellow/red</code></p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >green = 1</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >red = 1</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >集群健康状态</p>
+</td></tr><tr><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" ><code>Nodes</code></p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >稳定（如 7）</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >数值下降</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >节点数量，波动说明有节点掉线</p>
+</td></tr><tr><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" ><code>JVMMemoryPressure</code></p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >&lt; 75%</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >&gt; 90%</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >JVM 内存压力，&gt;92% 会触发 GC 问题</p>
+</td></tr><tr><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" ><code>CPUUtilization</code></p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >&lt; 80%</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >&gt; 90%</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >CPU 使用率</p>
+</td></tr><tr><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" ><code>FreeStorageSpace</code></p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >&gt; 20 GiB</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >&lt; 10 GiB</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >剩余存储空间</p>
+</td></tr><tr><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" ><code>ClusterIndexWritesBlocked</code></p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >0</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >1</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >写入是否被阻断</p>
+</td></tr></tbody></table>
+
+<h3 class="lx-h3" data-type="h3" >2.5 方式四：Console 命令诊断</h3>
+
+<p class="lx-p" data-type="p" >在 <b>KBX Console</b> 或 <b>Kibana Dev Tools</b> 中运行：</p>
+
+<p class="lx-code" data-type="code"><pre><code ># 查看集群健康状态
+GET _cluster/health
+
+# 查看所有索引状态
+GET _cat/indices?v
+
+# 查看未分配分片详情（可能需要多次运行）
+GET _cluster/allocation/explain
+
+# 查看分片分布，按状态排序
+GET _cat/shards?v&amp;s=state:desc
+
+# 查看节点状态
+GET _cat/nodes?v</code></pre></p>
+
+<hr class="lx-divider" data-type="divider" />
+
+<h2 class="lx-h2" data-type="h2" >三、Yellow 状态处理流程</h2>
+
+<p class="lx-p" data-type="p" ><b>Yellow 状态说明</b>：主分片正常，但部分副本分片未分配。数据仍然 100% 可用，但失去冗余保护。</p>
+
+<h3 class="lx-h3" data-type="h3" >3.1 处理决策</h3>
+
+<p class="lx-code" data-type="code"><pre><code >收到 Yellow 告警
+    ↓
+等待 5-10 分钟，观察是否自动恢复
+    ↓
+未恢复 → 检查 KBX 是否有 unassigned 分片
+    ↓
+有 unassigned → 执行副本重置操作</code></pre></p>
+
+<h3 class="lx-h3" data-type="h3" >3.2 修复方法：副本数 0 → 1 重置</h3>
+
+<p class="lx-p" data-type="p" >在 <b>Kibana Dev Tools</b> 中执行：</p>
+
+<p class="lx-code" data-type="code"><pre><code ># 第一步：将副本数设为 0
+PUT 索引名/_settings
+{
+  &quot;index&quot;: {
+    &quot;number_of_replicas&quot;: 0
+  }
+}
+
+# 等待几秒，确认返回 &quot;acknowledged&quot;: true
+
+# 第二步：将副本数设回 1
+PUT 索引名/_settings
+{
+  &quot;index&quot;: {
+    &quot;number_of_replicas&quot;: 1
+  }
+}
+
+# 第三步：验证结果
+GET _cluster/health
+GET _cat/indices/索引名?v</code></pre></p>
+
+<p class="lx-p" data-type="p" ><b>实际示例：</b></p>
+
+<p class="lx-code" data-type="code"><pre><code ># 修复 .opendistro-job-scheduler-lock 索引
+PUT .opendistro-job-scheduler-lock/_settings
+{
+  &quot;index&quot;: {
+    &quot;number_of_replicas&quot;: 0
+  }
+}
+
+# 等待成功后
+PUT .opendistro-job-scheduler-lock/_settings
+{
+  &quot;index&quot;: {
+    &quot;number_of_replicas&quot;: 1
+  }
+}</code></pre></p>
+
+<h3 class="lx-h3" data-type="h3" >3.3 批量修复（通配符）</h3>
+
+<p class="lx-code" data-type="code"><pre><code ># 批量修复某一类索引
+PUT ufenginx-*/_settings
+{
+  &quot;index&quot;: {
+    &quot;number_of_replicas&quot;: 0
+  }
+}</code></pre></p>
+
+<p class="lx-p" data-type="p" >⚠️ <b>注意</b>：系统索引（以 <code>.</code> 开头）操作需谨慎，建议单个处理</p>
+
+<hr class="lx-divider" data-type="divider" />
+
+<h2 class="lx-h2" data-type="h2" >四、Red 状态处理流程</h2>
+
+<p class="lx-p" data-type="p" ><b>Red 状态说明</b>：存在未分配的主分片，部分数据不可用。这是最严重的状态，必须立即处理。</p>
+
+<h3 class="lx-h3" data-type="h3" >4.1 处理决策树</h3>
+
+<p class="lx-code" data-type="code"><pre><code >收到 Red 告警
+    ↓
+第一步：检查节点状态
+- AWS Console 查看 Nodes 指标是否下降
+- 如节点掉线，等待 5-10 分钟看是否自动恢复
+    ↓
+第二步：尝试自动修复
+POST _cluster/reroute?retry_failed=true
+    ↓
+未恢复 → 第三步：手动处理
+- 日志索引：可直接删除
+- 重要数据：从快照恢复</code></pre></p>
+
+<h3 class="lx-h3" data-type="h3" >4.2 方案一：尝试自动重分配</h3>
+
+<p class="lx-code" data-type="code"><pre><code ># 尝试让系统重新分配失败的分片
+POST _cluster/reroute?retry_failed=true</code></pre></p>
+
+<p class="lx-p" data-type="p" ><b>成功率较低</b>，如果索引配置为 0 副本（N:0），此方法通常无效。</p>
+
+<h3 class="lx-h3" data-type="h3" >4.3 方案二：删除红色索引（日志类可用）</h3>
+
+<p class="lx-code" data-type="code"><pre><code ># 查看红色索引
+GET _cat/indices?v&amp;health=red
+
+# 删除指定索引
+DELETE /索引名称
+
+# 示例
+DELETE /ufenginx-2025.12.01
+DELETE /iprod_tomcat_lucky_k8s-2025.12.29-000050</code></pre></p>
+
+<p class="lx-p" data-type="p" >⚠️ <b>删除前必须确认</b></p>
+
+<ol ><li class="lx-numbered_list" data-type="numbered_list" >该索引是<b>日志类索引</b>，数据可丢失</li>
+
+<li class="lx-numbered_list" data-type="numbered_list" >该索引<b>不是当前写入索引</b>（无写别名）</li>
+
+<li class="lx-numbered_list" data-type="numbered_list" >该索引<b>不是 dify 集群</b>的数据（dify 数据不能删）</li>
+
+<li class="lx-numbered_list" data-type="numbered_list" >已<b>截图留痕</b></li></ol>
+
+<h3 class="lx-h3" data-type="h3" >4.4 方案三：从快照恢复（数据重要时）</h3>
+
+<p class="lx-code" data-type="code"><pre><code ># 查看可用快照
+GET _snapshot/cs-automated-enc/_all?verbose=false
+
+# 从指定快照恢复
+POST _snapshot/cs-automated-enc/快照名称/_restore
+{
+  &quot;indices&quot;: &quot;索引1,索引2&quot;,
+  &quot;ignore_unavailable&quot;: true,
+  &quot;include_global_state&quot;: false
+}
+
+# 示例
+POST _snapshot/cs-automated-enc/2025-12-29t14-52-10.4069ca1e-8ae1-2144-aa26-0c5aec1777a3/_restore
+{
+  &quot;indices&quot;: &quot;ufenginx-2025.12.29&quot;,
+  &quot;ignore_unavailable&quot;: true,
+  &quot;include_global_state&quot;: false
+}</code></pre></p>
+
+<h3 class="lx-h3" data-type="h3" >4.5 验证恢复结果</h3>
+
+<p class="lx-code" data-type="code"><pre><code ># 确认集群状态
+GET _cluster/health
+
+# 确认无红色索引
+GET _cat/indices?v&amp;health=red
+
+# 确认无未分配分片
+GET _cat/shards?v&amp;s=state:desc</code></pre></p>
+
+<hr class="lx-divider" data-type="divider" />
+
+<h2 class="lx-h2" data-type="h2" >五、常用诊断与修复命令速查</h2>
+
+<h3 class="lx-h3" data-type="h3" >5.1 诊断命令</h3>
+
+<table class="lx-table" data-type="table" border="1" cellspacing="0" cellpadding="10"><colgroup><col style="width: 150px"></col><col style="width: 384px"></col></colgroup><tbody><tr><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >用途</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >命令</p>
+</td></tr><tr><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >查看集群健康状态</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" ><code>GET _cluster/health</code></p>
+</td></tr><tr><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >查看所有索引</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" ><code>GET _cat/indices?v</code></p>
+</td></tr><tr><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >查看红色索引</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" ><code>GET _cat/indices?v&amp;health=red</code></p>
+</td></tr><tr><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >查看黄色索引</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" ><code>GET _cat/indices?v&amp;health=yellow</code></p>
+</td></tr><tr><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >查看分片状态</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" ><code>GET _cat/shards?v&amp;s=state:desc</code></p>
+</td></tr><tr><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >查看未分配原因</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" ><code>GET _cluster/allocation/explain</code></p>
+</td></tr><tr><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >查看节点状态</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" ><code>GET _cat/nodes?v</code></p>
+</td></tr><tr><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >查看索引模板</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" ><code>GET _template</code></p>
+</td></tr></tbody></table>
+
+<h3 class="lx-h3" data-type="h3" >5.2 修复命令</h3>
+
+<table class="lx-table" data-type="table" border="1" cellspacing="0" cellpadding="10"><colgroup><col style="width: 150px"></col><col style="width: 500px"></col></colgroup><tbody><tr><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >用途</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >命令</p>
+</td></tr><tr><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >尝试重分配分片</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" ><code>POST _cluster/reroute?retry_failed=true</code></p>
+</td></tr><tr><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >设置副本数为 0</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" ><code>PUT 索引名/_settings {&quot;index&quot;:{&quot;number_of_replicas&quot;:0}}</code></p>
+</td></tr><tr><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >设置副本数为 1</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" ><code>PUT 索引名/_settings {&quot;index&quot;:{&quot;number_of_replicas&quot;:1}}</code></p>
+</td></tr><tr><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >删除索引</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" ><code>DELETE /索引名</code></p>
+</td></tr><tr><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >清除字段数据缓存</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" ><code>POST _cache/clear?fielddata=true</code></p>
+</td></tr></tbody></table>
+
+<hr class="lx-divider" data-type="divider" />
+
+<h2 class="lx-h2" data-type="h2" >六、预防措施与最佳实践</h2>
+
+<h3 class="lx-h3" data-type="h3" >6.1 查询规范</h3>
+
+<p class="lx-p" data-type="p" >⚠️ <b>Grafana / 日志系统查询限制</b></p>
+
+<ul ><li class="lx-bulleted_list" data-type="bulleted_list" ><b>单次查询时间范围</b>：建议不超过 <b>3-7 天</b></li>
+
+<li class="lx-bulleted_list" data-type="bulleted_list" ><b>避免</b>：一次性拉取 30 天、整月数据</li>
+
+<li class="lx-bulleted_list" data-type="bulleted_list" ><b>分段拉取</b>：如需大范围数据，分多次小范围查询</li>
+
+<li class="lx-bulleted_list" data-type="bulleted_list" ><b>避免高峰期</b>：大查询避开业务高峰时段</li></ul>
+
+<h3 class="lx-h3" data-type="h3" >6.2 索引配置建议</h3>
+
+<table class="lx-table" data-type="table" border="1" cellspacing="0" cellpadding="10"><colgroup><col style="width: 150px"></col><col style="width: 150px"></col><col style="width: 150px"></col><col style="width: 192px"></col></colgroup><tbody><tr><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >配置项</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >不推荐</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >推荐</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >说明</p>
+</td></tr><tr><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >副本数</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >N:0（无副本）❌</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >N:1（1个副本）✅</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >无副本时节点故障直接导致 Red</p>
+</td></tr><tr><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >分片数</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >过多（6+）❌</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >2-4 个 ✅</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >分片过多增加集群管理开销</p>
+</td></tr></tbody></table>
+
+<p class="lx-p" data-type="p" ><b>修改索引模板示例：</b></p>
+
+<p class="lx-code" data-type="code"><pre><code ># 查看当前模板
+GET _template
+
+# 更新模板，添加副本配置
+PUT _template/logs-template
+{
+  &quot;index_patterns&quot;: [&quot;logs-*&quot;, &quot;ufenginx-*&quot;],
+  &quot;settings&quot;: {
+    &quot;number_of_shards&quot;: 2,
+    &quot;number_of_replicas&quot;: 1
+  }
+}</code></pre></p>
+
+<h3 class="lx-h3" data-type="h3" >6.3 集群容量建议</h3>
+
+<table class="lx-table" data-type="table" border="1" cellspacing="0" cellpadding="10"><colgroup><col style="width: 150px"></col><col style="width: 150px"></col><col style="width: 150px"></col><col style="width: 150px"></col></colgroup><tbody><tr><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >实例类型</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >内存</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >JVM 堆</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >建议场景</p>
+</td></tr><tr><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >m5.large（当前）</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >8 GB</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >~4 GB</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >小规模日志，易 OOM</p>
+</td></tr><tr><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" ><b>r5.large（推荐）</b></p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >16 GB</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >~8 GB</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >中等规模日志，内存充裕</p>
+</td></tr><tr><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >r5.xlarge</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >32 GB</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >~16 GB</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >大规模日志，高并发查询</p>
+</td></tr></tbody></table>
+
+<h3 class="lx-h3" data-type="h3" >6.4 监控告警建议</h3>
+
+<table class="lx-table" data-type="table" border="1" cellspacing="0" cellpadding="10"><colgroup><col style="width: 204px"></col><col style="width: 150px"></col><col style="width: 150px"></col><col style="width: 150px"></col></colgroup><tbody><tr><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >指标</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >阈值</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >持续时间</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >级别</p>
+</td></tr><tr><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >JVMMemoryPressure</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >&gt; 80%</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >5 分钟</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >Warning</p>
+</td></tr><tr><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >JVMMemoryPressure</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >&gt; 90%</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >3 分钟</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >Critical</p>
+</td></tr><tr><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >FreeStorageSpace</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >&lt; 20 GB</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >5 分钟</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >Warning</p>
+</td></tr><tr><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >Nodes</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >&lt; 预期值</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >1 分钟</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >Critical</p>
+</td></tr></tbody></table>
+
+<hr class="lx-divider" data-type="divider" />
+
+<h2 class="lx-h2" data-type="h2" >七、实战案例：luckylfe-log 集群事件（2025-12-29）</h2>
+
+<h3 class="lx-h3" data-type="h3" >7.1 事件概述</h3>
+
+<table class="lx-table" data-type="table" border="1" cellspacing="0" cellpadding="10"><colgroup><col style="width: 150px"></col><col style="width: 500px"></col></colgroup><tbody><tr><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >项目</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >内容</p>
+</td></tr><tr><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >集群</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" ><code>luckylfe-log</code></p>
+</td></tr><tr><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >告警时间</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >2025-12-29 19:06 UTC (Yellow) → 19:54 UTC (Red) → 20:30 UTC (Yellow)</p>
+</td></tr><tr><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >影响时长</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >约 1.5 小时</p>
+</td></tr><tr><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >数据丢失</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >14:52 - 19:54 UTC 期间约 5 小时日志</p>
+</td></tr></tbody></table>
+
+<h3 class="lx-h3" data-type="h3" >7.2 根因分析</h3>
+
+<p class="lx-p" data-type="p" ><b>直接原因</b>：JVM 内存耗尽（OOM）。安全同事在 Grafana 上进行了大范围日志查询（11月末至当日），导致 JVM 内存飙升至 99.9%，节点 OOM 掉落。</p>
+
+<p class="lx-p" data-type="p" ><b>核心问题</b>：索引使用 6:0 分片策略（无副本）。节点掉落时，没有副本可以恢复数据，主分片直接丢失，集群进入 Red 状态。</p>
+
+<h3 class="lx-h3" data-type="h3" >7.3 事件时间线</h3>
+
+<table class="lx-table" data-type="table" border="1" cellspacing="0" cellpadding="10"><colgroup><col style="width: 150px"></col><col style="width: 150px"></col><col style="width: 228px"></col></colgroup><tbody><tr><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >时间 (UTC)</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >状态</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >关键指标</p>
+</td></tr><tr><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >18:00-18:55</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >✅ Green</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >JVM 62-75%，7 节点正常</p>
+</td></tr><tr><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >19:00</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >⚠️ 异常开始</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >JVM 飙升至 97%，CPU 95%</p>
+</td></tr><tr><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >19:05</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >🟡 Yellow</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >出现 1 个未分配分片</p>
+</td></tr><tr><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >19:50</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >🔴 节点掉落</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >节点 7→5，148 个未分配分片</p>
+</td></tr><tr><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >19:55</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >🔴 Red</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >2 节点丢失，289 个未分配分片</p>
+</td></tr><tr><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >20:30</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >🟡 Yellow</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >节点恢复至 7，大部分分片重新分配</p>
+</td></tr></tbody></table>
+
+<h3 class="lx-h3" data-type="h3" >7.4 AWS Support 建议</h3>
+
+<ol ><li class="lx-numbered_list" data-type="numbered_list" >✅ 删除 Red 状态索引</li>
+
+<li class="lx-numbered_list" data-type="numbered_list" >✅ 从快照 <code>2025-12-29t14-52-10</code> 恢复数据</li>
+
+<li class="lx-numbered_list" data-type="numbered_list" >✅ 升级实例类型 m5.large → r5.large</li>
+
+<li class="lx-numbered_list" data-type="numbered_list" >⚠️ <b>关键</b>：修改分片策略从 6:0 改为 6:1（添加副本）</li></ol>
+
+<h3 class="lx-h3" data-type="h3" >7.5 经验教训</h3>
+
+<ol ><li class="lx-numbered_list" data-type="numbered_list" ><b>副本配置是关键</b>：无副本（N:0）的索引在节点故障时无法恢复，必须改为 N:1</li>
+
+<li class="lx-numbered_list" data-type="numbered_list" ><b>查询需限制范围</b>：Grafana 查询建议不超过 3-7 天</li>
+
+<li class="lx-numbered_list" data-type="numbered_list" ><b>JVM 监控前置</b>：在 80% 时就应告警，不要等到 90%+</li>
+
+<li class="lx-numbered_list" data-type="numbered_list" ><b>实例规格要匹配</b>：m5.large 对于大规模日志集群偏小</li></ol>
+
+<hr class="lx-divider" data-type="divider" />
+
+<h2 class="lx-h2" data-type="h2" >八、附录</h2>
+
+<h3 class="lx-h3" data-type="h3" >8.1 日志保留策略</h3>
+
+<table class="lx-table" data-type="table" border="1" cellspacing="0" cellpadding="10"><colgroup><col style="width: 150px"></col><col style="width: 150px"></col><col style="width: 150px"></col></colgroup><tbody><tr><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >集群</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >保留时间</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >备注</p>
+</td></tr><tr><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" ><code>luckylfe-log</code></p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" ><b>30 天</b></p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >北美主日志集群</p>
+</td></tr><tr><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" ><code>luckyur-log</code></p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" ><b>15 天</b></p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" ></p>
+</td></tr><tr><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" ><code>dify</code></p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" ><b>不删除</b></p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >业务数据，非日志类</p>
+</td></tr><tr><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >按日索引</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >7 天</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >优先清理</p>
+</td></tr><tr><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >按月索引</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >3-6 个月</p>
+</td><td class="lx-table_cell" data-type="table_cell"   >
+<p class="lx-p" data-type="p" >谨慎删除</p>
+</td></tr></tbody></table>
+
+<h3 class="lx-h3" data-type="h3" >8.2 不可删除的索引</h3>
+
+<ul ><li class="lx-bulleted_list" data-type="bulleted_list" >系统索引（以 <code>.</code> 开头，如 <code>.kibana</code>、<code>.opendistro</code>）</li>
+
+<li class="lx-bulleted_list" data-type="bulleted_list" >当前活跃写入索引（挂有写别名）</li>
+
+<li class="lx-bulleted_list" data-type="bulleted_list" ><code>dify</code> 集群的任何数据</li></ul>
+
+<h3 class="lx-h3" data-type="h3" >8.3 相关链接</h3>
+
+<ul ><li class="lx-bulleted_list" data-type="bulleted_list" ><b>KBX 系统</b>：<a href="https://ikbx.luckincoffee.us/#/admin/first">https://ikbx.luckincoffee.us/#/admin/first</a></li>
+
+<li class="lx-bulleted_list" data-type="bulleted_list" ><b>iZeus 告警平台</b>：<a href="https://izeus.luckincoffee.us">https://izeus.luckincoffee.us</a></li>
+
+<li class="lx-bulleted_list" data-type="bulleted_list" ><b>AWS OpenSearch Console</b>：<a href="https://console.aws.amazon.com/aos/home">https://console.aws.amazon.com/aos/home</a></li></ul>
+</div>
