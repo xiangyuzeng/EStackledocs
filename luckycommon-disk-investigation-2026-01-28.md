@@ -311,10 +311,95 @@ ORDER BY create_time DESC;
 
 ---
 
+## 9. DBA Action Required - Identify Non-Partitioned Indices
+
+### 9.1 Investigation Scope & Limitations
+
+**What We Confirmed via CloudWatch/DevOps DB:**
+| Data Point | Source | Status |
+|------------|--------|--------|
+| Free space trend | CloudWatch | ✅ Confirmed 7.8GB → 48GB |
+| Expansion timing | CloudWatch | ✅ Applied at 19:03 UTC |
+| Growth rate | CloudWatch | ✅ ~3 GB/day |
+| Cluster status | CloudWatch | ✅ GREEN throughout |
+| Indexing rate | CloudWatch | ✅ Peak 3,000 docs/sec |
+| Node count | CloudWatch | ✅ 7 nodes stable |
+| Alert history | DevOps DB | ✅ Multiple firing alerts |
+
+**What We Could NOT Determine:**
+| Data Point | Reason |
+|------------|--------|
+| Specific index names | No direct ES API access via MCP |
+| Index sizes | Requires `_cat/indices` API |
+| ISM policy status | Requires `_plugins/_ism/explain` API |
+| Non-partitioned index list | Requires ES cluster query |
+
+### 9.2 Immediate DBA Actions
+
+**Priority: P0 - Execute within 4 hours**
+
+The DBA team MUST run these commands on the luckycommon cluster to identify the 3 non-partitioned indices:
+
+```bash
+# Step 1: Get the actual ES endpoint from AWS Console
+# Navigate to: AWS Console → OpenSearch Service → luckycommon → Domain endpoint
+
+# Step 2: Set environment variable
+export ES_ENDPOINT="https://search-luckycommon-XXXX.us-east-1.es.amazonaws.com"
+
+# Step 3: List top 20 indices by size
+curl -s "${ES_ENDPOINT}/_cat/indices?v&s=store.size:desc&h=index,store.size,docs.count" | head -20
+
+# Step 4: Filter for NON-PARTITIONED indices (no date pattern)
+# These are the problematic indices causing disk growth
+curl -s "${ES_ENDPOINT}/_cat/indices?h=index,store.size&s=store.size:desc" | \
+  grep -v "\-[0-9]\{4\}\." | \
+  grep -v "\-[0-9]\{4\}\-[0-9]\{2\}\-[0-9]\{2\}" | \
+  grep -v "\-[0-9]\{6\}$" | \
+  head -10
+
+# Step 5: For each suspicious index, check ISM policy
+curl -s "${ES_ENDPOINT}/_plugins/_ism/explain/<INDEX_NAME>?pretty"
+
+# Step 6: Document the 3 largest non-partitioned indices:
+# - Index name
+# - Current size (GB)
+# - Document count
+# - ISM policy status (managed: true/false)
+# - Creation date
+```
+
+### 9.3 Expected Output Format
+
+After running the commands, update this report with the actual findings:
+
+| Index Name | Size (GB) | Doc Count | ISM Managed | Created | Action |
+|------------|-----------|-----------|-------------|---------|--------|
+| [index-1] | [X] GB | [Y] | Yes/No | [date] | Apply ISM |
+| [index-2] | [X] GB | [Y] | Yes/No | [date] | Apply ISM |
+| [index-3] | [X] GB | [Y] | Yes/No | [date] | Apply ISM |
+
+### 9.4 Urgency Calculation
+
+**Without ISM policy implementation:**
+- Current free space: ~48 GB
+- Daily growth rate: ~3 GB/day
+- **Days until next alert (10GB threshold):** ~13 days (Feb 10)
+- **Days until write block (5GB threshold):** ~15 days (Feb 12)
+
+**With ISM policy (7-day retention):**
+- Expected steady-state: ~21 GB used
+- Projected free space: ~130 GB
+- **No further alerts expected**
+
+---
+
 **Investigation Completed:** 2026-01-28T20:00:00Z
+**Updated:** 2026-01-28 (Added DBA Action Section)
 **Investigator:** Claude Code (Automated Analysis)
 **Data Sources:** CloudWatch Metrics, DevOps Alert Logs, Existing Documentation
 **Review Required By:** DBA Team Lead
+**DBA Action Due:** 2026-01-29 00:00 UTC (4 hours from expansion)
 
 ---
 
